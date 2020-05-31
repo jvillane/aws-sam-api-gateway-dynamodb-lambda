@@ -1,0 +1,271 @@
+openapi: 3.0.1
+info:
+  title: Api Mocker
+  description: Automated testing application for TGR
+  contact:
+    name: Julio Villane
+    email: jvillane+github@gmail.com
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0.html
+  version: 1.0.0
+
+x-amazon-apigateway-request-validators:
+  body:
+    validateRequestParameters: false
+    validateRequestBody: true
+  params:
+    validateRequestParameters: true
+    validateRequestBody: false
+  all:
+    validateRequestParameters: true
+    validateRequestBody: true
+
+paths:
+  /owner/all:
+    get:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:dynamodb:action/Scan
+        httpMethod: POST
+        type: aws
+        credentials:
+          Fn::GetAtt: ApiGatewayRole.Arn
+        requestTemplates:
+          application/json:
+            Fn::Sub: |
+              {
+                "TableName": "${OwnerTable}"
+              }
+        responses:
+          default:
+            statusCode: 200
+            schema:
+              $ref: '#/components/responses/OwnerAll'
+            responseTemplates:
+              application/json: |
+                #set($owners = $input.path("$").Items)
+                [
+                  #foreach($owner in $owners) {
+                    "Id": $owner.Id.N,
+                    "Name": "$owner.Name.S",
+                    "CreatedAt": "$owner.CreatedAt.S"
+                  } #if($foreach.hasNext),#end
+                  #end
+                ]
+      summary: The owner list
+      responses:
+        200:
+          $ref: '#/components/responses/OwnerAll'
+  /owner:
+    get:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:dynamodb:action/Query
+        httpMethod: POST
+        type: aws
+        credentials:
+          Fn::GetAtt: ApiGatewayRole.Arn
+        requestTemplates:
+          application/json:
+            Fn::Sub: |
+              {
+                #if ($input.params("Id") != "" && $input.params("Active") != "")
+                "ExclusiveStartKey": {
+                  "Id": {
+                    "N": $input.params("Id")
+                  },
+                  "Active": {
+                    "N": $input.params("Active")
+                  }
+                },
+                #end
+                "TableName": "${OwnerTable}",
+                "KeyConditionExpression": "Active = :active",
+                "IndexName": "ActiveIndex",
+                "ExpressionAttributeValues": {
+                  ":active": {
+                    "N": "1"
+                  }
+                },
+                "Limit": 2
+              }
+        responses:
+          default:
+            statusCode: 200
+            schema:
+              $ref: '#/components/responses/OwnerPaginate'
+      summary: The owner list
+      parameters:
+        - name: Id
+          in: query
+          description: Last evaluated key Id
+          schema:
+            type: number
+      responses:
+        200:
+          $ref: '#/components/responses/OwnerPaginate'
+
+  /pet/all:
+    get:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetAll.Arn}/invocations
+        httpMethod: POST
+        type: aws
+        responses:
+          default:
+            statusCode: 200
+            schema:
+              $ref: '#/components/responses/PetAll'
+      summary: The owner's pet list
+      responses:
+        200:
+          $ref: '#/components/responses/PetAll'
+  /owner/{ownerId}/pet:
+    get:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetPaginate.Arn}/invocations
+        httpMethod: POST
+        type: aws
+        requestTemplates:
+          application/json: |
+            {
+              #if ($input.params("Id") != "" && $input.params("OwnerId") != "")
+              "ExclusiveStartKey": {
+                "Id": $input.params("Id"),
+                "OwnerId": $input.params("OwnerId")
+              },
+              #end
+              "OwnerId": $input.params().path.get('ownerId')
+            }
+        responses:
+          default:
+            statusCode: 200
+            schema:
+              $ref: '#/components/responses/PetPaginate'
+      summary: The owner's pet list
+      parameters:
+        - name: ownerId
+          in: path
+          description: the owner identificator
+          required: true
+          schema:
+            type: number
+        - name: Id
+          in: query
+          description: Last evaluated key Id
+          schema:
+            type: number
+        - name: OwnerId
+          in: path
+          description: Last evaluated key OwnerId
+          schema:
+            type: number
+      responses:
+        200:
+          $ref: '#/components/responses/PetPaginate'
+
+components:
+  schemas:
+    Owner:
+      title: Owner
+      type: object
+      properties:
+        Id:
+          type: number
+        Name:
+          type: string
+        CreatedAt:
+          type: string
+      required:
+        - Name
+    Pet:
+      title: Pet
+      type: object
+      properties:
+        Id:
+          type: number
+        Name:
+          type: string
+        CreatedAt:
+          type: string
+        Tags:
+          type: array
+          items:
+            type: string
+      required:
+        - Name
+    OwnerList:
+      title: List of owners
+      type: array
+      items:
+        $ref: '#/components/schemas/Owner'
+    PetList:
+      title: List of pets
+      type: array
+      items:
+        $ref: '#/components/schemas/Pet'
+
+    Error:
+      title: Error
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+        - code
+        - message
+
+  responses:
+    OwnerAll:
+      description: List of owners
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/OwnerList'
+    OwnerPaginate:
+      description: Paginated list of owners
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              Items:
+                $ref: '#/components/schemas/OwnerList'
+              LastEvaluatedKey:
+                type: object
+                properties:
+                  Id:
+                    type: number
+    PetAll:
+      description: List of pets by owner
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/PetList'
+    PetPaginate:
+      description: Paginated list of pets by owner
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              Items:
+                $ref: '#/components/schemas/PetList'
+              LastEvaluatedKey:
+                type: object
+                properties:
+                  Id:
+                    type: number
+                  OwnerId:
+                    type: number
+    Error:
+      description: Error response
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

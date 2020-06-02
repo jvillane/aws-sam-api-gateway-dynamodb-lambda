@@ -102,15 +102,64 @@ paths:
           description: Last evaluated key Id
           schema:
             type: number
+        - name: Active
+          in: query
+          description: Last evaluated key Active
+          schema:
+            type: number
       responses:
         200:
           $ref: '#/components/responses/OwnerPaginate'
+    post:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:dynamodb:action/PutItem
+        httpMethod: POST
+        type: aws
+        credentials:
+          Fn::GetAtt: ApiGatewayRole.Arn
+        requestTemplates:
+          application/json:
+            Fn::Sub: |
+              {
+                "TableName": "jv-aws-sam-api-gateway-dynamodb-lambda_Owner",
+                "Item": {
+                  "Id": {
+                    "N": "$context.requestTimeEpoch"
+                  },
+                  "Name": {
+                    "S": $input.json('$.Name')
+                  },
+                  "CreatedAt": {
+                    "S": "$context.requestTime"
+                  },
+                  "Active": {
+                    "N": "1"
+                  }
+                }
+              }
+        responses:
+          default:
+            statusCode: 201
+            schema:
+              $ref: '#/components/responses/Owner'
+      summary: The owner list
+      requestBody:
+        description: user
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerCreate'
+      responses:
+        200:
+          $ref: '#/components/responses/Owner'
 
   /pet/all:
     get:
       x-amazon-apigateway-integration:
         uri:
-          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetAll.Arn}/invocations
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetScan.Arn}/invocations
         httpMethod: POST
         type: aws
         responses:
@@ -126,19 +175,19 @@ paths:
     get:
       x-amazon-apigateway-integration:
         uri:
-          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetPaginate.Arn}/invocations
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetQuery.Arn}/invocations
         httpMethod: POST
         type: aws
         requestTemplates:
           application/json: |
             {
               #if ($input.params("Id") != "" && $input.params("OwnerId") != "")
-              "ExclusiveStartKey": {
+              "exclusiveStartKey": {
                 "Id": $input.params("Id"),
                 "OwnerId": $input.params("OwnerId")
               },
               #end
-              "OwnerId": $input.params().path.get('ownerId')
+              "ownerId": $input.params().path.get('ownerId')
             }
         responses:
           default:
@@ -158,14 +207,119 @@ paths:
           description: Last evaluated key Id
           schema:
             type: number
-        - name: OwnerId
+        - name: ownerId
           in: path
-          description: Last evaluated key OwnerId
+          description: Last evaluated key ownerId
           schema:
             type: number
       responses:
         200:
           $ref: '#/components/responses/PetPaginate'
+    post:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetPost.Arn}/invocations
+        httpMethod: POST
+        type: aws
+        requestTemplates:
+          application/json: |
+            {
+              "ownerId": $input.params().path.get('ownerId'),
+              "pet": $input.json('$')
+            }
+        responses:
+          default:
+            statusCode: 201
+            schema:
+              $ref: '#/components/responses/Pet'
+      summary: The owner's pet list
+      parameters:
+        - name: ownerId
+          in: path
+          description: the owner identificator
+          required: true
+          schema:
+            type: number
+      responses:
+        200:
+          $ref: '#/components/responses/Pet'
+  /owner/{ownerId}/pet/{petId}:
+    get:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetQueryId.Arn}/invocations
+        httpMethod: POST
+        type: aws
+        requestTemplates:
+          application/json: |
+            {
+              "ownerId": $input.params().path.get('ownerId'),
+              "petId": $input.params().path.get('petId')
+            }
+        responses:
+          default:
+            statusCode: 200
+            schema:
+              $ref: '#/components/responses/Pet'
+      summary: The owner's pet details
+      parameters:
+        - name: ownerId
+          in: path
+          description: the owner identificator
+          required: true
+          schema:
+            type: number
+        - name: petId
+          in: path
+          description: the pet identificator
+          required: true
+          schema:
+            type: number
+      responses:
+        200:
+          $ref: '#/components/responses/Pet'
+    put:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetPut.Arn}/invocations
+        httpMethod: POST
+        type: aws
+        requestTemplates:
+          application/json: |
+            {
+              "ownerId": $input.params().path.get('ownerId'),
+              "petId": $input.params().path.get('petId'),
+              "pet": $input.json('$')
+            }
+        responses:
+          default:
+            statusCode: 200
+            schema:
+              $ref: '#/components/responses/Pet'
+      summary: The owner's pet list
+      requestBody:
+        description: Pet info
+        required: true
+        content:
+          "application/json":
+            schema:
+              $ref: '#/components/schemas/Pet'
+      parameters:
+        - name: ownerId
+          in: path
+          description: the owner identificator
+          required: true
+          schema:
+            type: number
+        - name: petId
+          in: path
+          description: the pet identificator
+          required: true
+          schema:
+            type: number
+      responses:
+        200:
+          $ref: '#/components/responses/Pet'
 
 components:
   schemas:
@@ -178,6 +332,14 @@ components:
         Name:
           type: string
         CreatedAt:
+          type: string
+      required:
+        - Name
+    OwnerCreate:
+      title: Owner without Id
+      type: object
+      properties:
+        Name:
           type: string
       required:
         - Name
@@ -221,6 +383,12 @@ components:
         - message
 
   responses:
+    Owner:
+      description: List of owners
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Owner'
     OwnerAll:
       description: List of owners
       content:
@@ -241,6 +409,12 @@ components:
                 properties:
                   Id:
                     type: number
+    Pet:
+      description: List of pets by owner
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Pet'
     PetAll:
       description: List of pets by owner
       content:

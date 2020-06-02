@@ -13,6 +13,7 @@ export interface Pet {
   Name: string
   CreatedAt: string
   Tags: string[]
+  Active: 1 | 0
 }
 
 export interface QueryResult<E> {

@@ -145,35 +145,77 @@ Resources:
           Parameters:
             Location: !Ref SwaggerS3File
 
-  PetAll:
+  PetScan:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: dist
-      Handler: pet.all
+      Handler: pet.scan
       Role: !GetAtt LambdaRole.Arn
       Events:
-        Proxy:
+        ApiEvent:
           Type: Api
           Properties:
             RestApiId: !Ref Api
             Path: /pet/all
             Method: get
 
-  PetPaginate:
+  PetQuery:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: dist
-      Handler: pet.paginate
+      Handler: pet.query
       Role: !GetAtt LambdaRole.Arn
       Events:
-        Proxy:
+        ApiEvent:
           Type: Api
           Properties:
             RestApiId: !Ref Api
             Path: /owner/{ownerId}/pet
             Method: get
 
+  PetQueryId:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist
+      Handler: pet.queryId
+      Role: !GetAtt LambdaRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /owner/{ownerId}/pet/{petId}
+            Method: get
+
+  PetPost:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist
+      Handler: pet.post
+      Role: !GetAtt LambdaRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /owner/{ownerId}/pet
+            Method: post
+
+  PetPut:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist
+      Handler: pet.put
+      Role: !GetAtt LambdaRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /owner/{ownerId}/pet/{petId}
+            Method: put
+
 Outputs:
   ApiUrl:
     Description: API URL
-    Value: !Sub https://${Api}.execute-api.${AWS::Region}.amazonaws.com/calculator
+    Value: !Sub https://${Api}.execute-api.${AWS::Region}.amazonaws.com/veterinary

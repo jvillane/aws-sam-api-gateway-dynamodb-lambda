@@ -26,7 +26,17 @@ Where:
 
 An API whose Url can be obtained on the CloudFormation stack outputs (`ApiUrl`) with the endpoints:
 
-- `GET /owner/all`: Dynamo Table `Owner` scan directly from Dynamo.
-- `GET /owner`: Dynamo Table `Owner` query directly from Dynamo.
-- `GET /pet/all`: Dynamo Table `Pet` scan trough a Lambda from Dynamo.
-- `GET /owner/{ownerId}/pet`: Dynamo Table `Pet` query trough a Lambda from Dynamo.
+- Directly from API Gateway using DynamoDB API:
+    - `GET /owner/all`: scans `Owner` table.
+    - `GET /owner`: queries `Owner` table.
+    - `POST /owner`: puts an item to `Owner` table.
+    - `GET /owner/{ownerId}`: gets an owner item by its Id from `Owner` table.
+    - `PUT /owner/{ownerId}`: updates an item by its Id to `Owner` table.
+    - `DELETE /owner/{ownerId}`: deletes an item by its Id to `Owner` table.
+- API Gateway AWS integration to Lambda Function, and using the `aws-sdk` to interact with DynamoDB
+    - `GET /pet/all`: scans `Pet` table.
+    - `GET /owner/{ownerId}/pet`: queries `Pet` table filtering by an owner.
+    - `POST /owner/{ownerId}/pet`: puts an item to `Pet` table associated to a particular owner.
+    - `GET /owner/{ownerId}/pet/{petId}`: gets an item by its Id from `Pet` table.
+    - `PUT /owner/{ownerId}/pet/{petId}`: updates an item by its Id to `Pet` table.
+    - `DELETE /owner/{ownerId}/pet/{petId}`: deletes an item by its Id to `Pet` table.

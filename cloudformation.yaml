@@ -177,7 +177,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       CodeUri: dist
-      Handler: pet.queryId
+      Handler: pet.get
       Role: !GetAtt LambdaRole.Arn
       Events:
         ApiEvent:
@@ -186,20 +186,6 @@ Resources:
             RestApiId: !Ref Api
             Path: /owner/{ownerId}/pet/{petId}
             Method: get
-
-  PetPost:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: dist
-      Handler: pet.post
-      Role: !GetAtt LambdaRole.Arn
-      Events:
-        ApiEvent:
-          Type: Api
-          Properties:
-            RestApiId: !Ref Api
-            Path: /owner/{ownerId}/pet
-            Method: post
 
   PetPut:
     Type: AWS::Serverless::Function
@@ -212,8 +198,36 @@ Resources:
           Type: Api
           Properties:
             RestApiId: !Ref Api
+            Path: /owner/{ownerId}/pet
+            Method: post
+
+  PetUpdate:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist
+      Handler: pet.update
+      Role: !GetAtt LambdaRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
             Path: /owner/{ownerId}/pet/{petId}
             Method: put
+
+  PetDelete:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: dist
+      Handler: pet.remove
+      Role: !GetAtt LambdaRole.Arn
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref Api
+            Path: /owner/{ownerId}/pet/{petId}
+            Method: delete
 
 Outputs:
   ApiUrl:

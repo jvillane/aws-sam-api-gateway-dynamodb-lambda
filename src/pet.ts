@@ -6,9 +6,14 @@ interface FromOwner {
   exclusiveStartKey: DynamoDB.DocumentClient.Key
 }
 
+interface IdsRequest {
+  ownerId: number
+  petId: number
+}
+
 interface PutRequest {
   ownerId: number
-  petId?: number
+  petId: number
   pet: Pet
 }
 
@@ -56,7 +61,27 @@ export const query: CustomHandler<FromOwner, QueryResult<Pet>> = ({ownerId, excl
   });
 }
 
-export const post: CustomHandler<PutRequest, any> = ({ownerId, pet}, context, callback) => {
+export const get: CustomHandler<IdsRequest, Pet | {}> = ({ownerId, petId}, context, callback) => {
+  const params: DynamoDB.DocumentClient.GetItemInput = {
+    TableName: PET_TABLE_NAME,
+    Key: {
+      "Id": petId
+    }
+  };
+  ddbClient.get(params, (err, data) => {
+    if (err) {
+      callback({name: err.code, message: err.message});
+    } else {
+      let item = {};
+      if (data.Item) {
+        item = data.Item;
+      }
+      callback(null, item);
+    }
+  });
+}
+
+export const put: CustomHandler<PutRequest, any> = ({ownerId, pet}, context, callback) => {
   const now = new Date();
   const item: Pet = {
     Id: now.getTime(),
@@ -79,7 +104,7 @@ export const post: CustomHandler<PutRequest, any> = ({ownerId, pet}, context, ca
   });
 }
 
-export const put: CustomHandler<PutRequest, any> = ({ownerId, petId, pet}, context, callback) => {
+export const update: CustomHandler<PutRequest, any> = ({ownerId, petId, pet}, context, callback) => {
   const params: DynamoDB.DocumentClient.UpdateItemInput = {
     TableName: PET_TABLE_NAME,
     Key: {
@@ -101,6 +126,22 @@ export const put: CustomHandler<PutRequest, any> = ({ownerId, petId, pet}, conte
       callback({name: err.code, message: err.message});
     } else {
       callback(null, data);
+    }
+  });
+}
+
+export const remove: CustomHandler<IdsRequest, any> = ({ownerId, petId}, context, callback) => {
+  const params: DynamoDB.DocumentClient.DeleteItemInput = {
+    TableName: PET_TABLE_NAME,
+    Key: {
+      "Id": petId
+    }
+  };
+  ddbClient.delete(params, (err, data) => {
+    if (err) {
+      callback({name: err.code, message: err.message});
+    } else {
+      callback(null, {});
     }
   });
 }

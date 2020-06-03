@@ -1,7 +1,7 @@
 openapi: 3.0.1
 info:
-  title: Api Mocker
-  description: Automated testing application for TGR
+  title: Simple veterinary
+  description: Example of using APIGateway + DynamoDB and APIGateway + Lambda + DynamoDB
   contact:
     name: Julio Villane
     email: jvillane+github@gmail.com
@@ -49,11 +49,14 @@ paths:
                   #foreach($owner in $owners) {
                     "Id": $owner.Id.N,
                     "Name": "$owner.Name.S",
+                    #if ($owner.Tags.SS != "")
+                    "Tags": $owner.Tags.SS,
+                    #end
                     "CreatedAt": "$owner.CreatedAt.S"
                   } #if($foreach.hasNext),#end
                   #end
                 ]
-      summary: The owner list
+      summary: The complete owner's list
       responses:
         200:
           $ref: '#/components/responses/OwnerAll'
@@ -95,7 +98,7 @@ paths:
             statusCode: 200
             schema:
               $ref: '#/components/responses/OwnerPaginate'
-      summary: The owner list
+      summary: The iterable owner's list
       parameters:
         - name: Id
           in: query
@@ -122,7 +125,7 @@ paths:
           application/json:
             Fn::Sub: |
               {
-                "TableName": "jv-aws-sam-api-gateway-dynamodb-lambda_Owner",
+                "TableName": "${OwnerTable}",
                 "Item": {
                   "Id": {
                     "N": "$context.requestTimeEpoch"
@@ -142,7 +145,7 @@ paths:
           default:
             statusCode: 201
             schema:
-              $ref: '#/components/responses/Owner'
+              $ref: '#/components/responses/Empty'
       summary: The owner list
       requestBody:
         description: user
@@ -152,25 +155,127 @@ paths:
             schema:
               $ref: '#/components/schemas/OwnerCreate'
       responses:
-        200:
-          $ref: '#/components/responses/Owner'
-
-  /pet/all:
+        201:
+          $ref: '#/components/responses/Empty'
+  /owner/{ownerId}:
     get:
       x-amazon-apigateway-integration:
         uri:
-          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetScan.Arn}/invocations
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:dynamodb:action/GetItem
         httpMethod: POST
         type: aws
+        credentials:
+          Fn::GetAtt: ApiGatewayRole.Arn
+        requestTemplates:
+          application/json:
+            Fn::Sub: |
+              {
+                "TableName": "${OwnerTable}",
+                "Key": {
+                  "Id": {
+                    "N": "$input.params("ownerId")"
+                  }
+                }
+              }
         responses:
           default:
             statusCode: 200
             schema:
-              $ref: '#/components/responses/PetAll'
-      summary: The owner's pet list
+              $ref: '#/components/responses/Owner'
+      summary: Get owner by Id
+      parameters:
+        - name: ownerId
+          in: path
+          description: The owner identificator
+          schema:
+            type: number
       responses:
         200:
-          $ref: '#/components/responses/PetAll'
+          $ref: '#/components/responses/Owner'
+    delete:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:dynamodb:action/DeleteItem
+        httpMethod: POST
+        type: aws
+        credentials:
+          Fn::GetAtt: ApiGatewayRole.Arn
+        requestTemplates:
+          application/json:
+            Fn::Sub: |
+              {
+                "TableName": "${OwnerTable}",
+                "Key": {
+                  "Id": {
+                    "N": "$input.params("ownerId")"
+                  }
+                }
+              }
+        responses:
+          default:
+            statusCode: 200
+            schema:
+              $ref: '#/components/responses/Empty'
+      summary: Deletes an owner
+      parameters:
+        - name: ownerId
+          in: path
+          description: Last evaluated key Id
+          schema:
+            type: number
+      responses:
+        200:
+          $ref: '#/components/responses/Empty'
+    put:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:dynamodb:action/UpdateItem
+        httpMethod: POST
+        type: aws
+        credentials:
+          Fn::GetAtt: ApiGatewayRole.Arn
+        requestTemplates:
+          application/json:
+            Fn::Sub: |
+              {
+                "TableName": "${OwnerTable}",
+                "Key": {
+                  "Id": {
+                    "N": "$input.params("ownerId")"
+                  }
+                },
+                "UpdateExpression": "SET #Name = :name, Tags = :tags, Active = :active",
+                "ExpressionAttributeValues": {
+                  ":name": {
+                    "S": $input.json('$.Name')
+                  },
+                  ":tags": {
+                    "SS": $input.json('$.Tags')
+                  },
+                  ":active": {
+                    "N": "$input.json('$.Active')"
+                  }
+                },
+                "ExpressionAttributeNames": {
+                  "#Name": "Name"
+                }
+              }
+        responses:
+          default:
+            statusCode: 200
+            schema:
+              $ref: '#/components/responses/Empty'
+      summary: Updates the owner's info
+      requestBody:
+        description: owners info
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OwnerUpdate'
+      responses:
+        200:
+          $ref: '#/components/responses/Empty'
   /owner/{ownerId}/pet:
     get:
       x-amazon-apigateway-integration:
@@ -181,20 +286,20 @@ paths:
         requestTemplates:
           application/json: |
             {
-              #if ($input.params("Id") != "" && $input.params("OwnerId") != "")
+              #if ($input.params("Id") != "")
               "exclusiveStartKey": {
                 "Id": $input.params("Id"),
-                "OwnerId": $input.params("OwnerId")
+                "OwnerId": $input.params("ownerId")
               },
               #end
-              "ownerId": $input.params().path.get('ownerId')
+              "ownerId": $input.params("ownerId")
             }
         responses:
           default:
             statusCode: 200
             schema:
               $ref: '#/components/responses/PetPaginate'
-      summary: The owner's pet list
+      summary: The iterable owner's pet list
       parameters:
         - name: ownerId
           in: path
@@ -207,18 +312,13 @@ paths:
           description: Last evaluated key Id
           schema:
             type: number
-        - name: ownerId
-          in: path
-          description: Last evaluated key ownerId
-          schema:
-            type: number
       responses:
         200:
           $ref: '#/components/responses/PetPaginate'
     post:
       x-amazon-apigateway-integration:
         uri:
-          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetPost.Arn}/invocations
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetPut.Arn}/invocations
         httpMethod: POST
         type: aws
         requestTemplates:
@@ -231,7 +331,7 @@ paths:
           default:
             statusCode: 201
             schema:
-              $ref: '#/components/responses/Pet'
+              $ref: '#/components/responses/Empty'
       summary: The owner's pet list
       parameters:
         - name: ownerId
@@ -241,8 +341,8 @@ paths:
           schema:
             type: number
       responses:
-        200:
-          $ref: '#/components/responses/Pet'
+        201:
+          $ref: '#/components/responses/Empty'
   /owner/{ownerId}/pet/{petId}:
     get:
       x-amazon-apigateway-integration:
@@ -278,10 +378,44 @@ paths:
       responses:
         200:
           $ref: '#/components/responses/Pet'
+    delete:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetDelete.Arn}/invocations
+        httpMethod: POST
+        type: aws
+        requestTemplates:
+          application/json: |
+            {
+              "ownerId": $input.params().path.get('ownerId'),
+              "petId": $input.params().path.get('petId')
+            }
+        responses:
+          default:
+            statusCode: 200
+            schema:
+              $ref: '#/components/responses/Empty'
+      summary: Deletes a pet
+      parameters:
+        - name: ownerId
+          in: path
+          description: the owner identificator
+          required: true
+          schema:
+            type: number
+        - name: petId
+          in: path
+          description: the pet identificator
+          required: true
+          schema:
+            type: number
+      responses:
+        200:
+          $ref: '#/components/responses/Empty'
     put:
       x-amazon-apigateway-integration:
         uri:
-          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetPut.Arn}/invocations
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetUpdate.Arn}/invocations
         httpMethod: POST
         type: aws
         requestTemplates:
@@ -295,8 +429,8 @@ paths:
           default:
             statusCode: 200
             schema:
-              $ref: '#/components/responses/Pet'
-      summary: The owner's pet list
+              $ref: '#/components/responses/Empty'
+      summary: Updates an owner's pet
       requestBody:
         description: Pet info
         required: true
@@ -319,7 +453,23 @@ paths:
             type: number
       responses:
         200:
-          $ref: '#/components/responses/Pet'
+          $ref: '#/components/responses/Empty'
+  /pet/all:
+    get:
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${PetScan.Arn}/invocations
+        httpMethod: POST
+        type: aws
+        responses:
+          default:
+            statusCode: 200
+            schema:
+              $ref: '#/components/responses/PetAll'
+      summary: The owner's pet list
+      responses:
+        200:
+          $ref: '#/components/responses/PetAll'
 
 components:
   schemas:
@@ -333,16 +483,44 @@ components:
           type: string
         CreatedAt:
           type: string
+        Tags:
+          type: array
+          items:
+            type: string
+        Active:
+          type: boolean
       required:
         - Name
+        - Tags
     OwnerCreate:
       title: Owner without Id
       type: object
       properties:
         Name:
           type: string
+        Tags:
+          type: array
+          items:
+            type: string
       required:
         - Name
+        - Tags
+    OwnerUpdate:
+      title: Owner without Id
+      type: object
+      properties:
+        Name:
+          type: string
+        Tags:
+          type: array
+          items:
+            type: string
+        Active:
+          type: boolean
+      required:
+        - Name
+        - Tags
+        - Active
     Pet:
       title: Pet
       type: object
@@ -383,6 +561,12 @@ components:
         - message
 
   responses:
+    Empty:
+      description: List of owners
+      content:
+        application/json:
+          schema:
+            type: object
     Owner:
       description: List of owners
       content:
